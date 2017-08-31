@@ -169,8 +169,7 @@ def main(train_file,
                   char_vocab_size=len(char2id),
                   char_embed_size=30,
                   n_labels=len(tag2id))
-    model(train_words, train_chars)
-    if gpu > -1:
+    if gpu >= 0:
         chainer.cuda.get_device_from_id(gpu).use()
         model.to_gpu()
 
