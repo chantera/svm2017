@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import chainer
-from chainer import functions as F, links as L
+from chainer import functions as F, initializers, links as L
 import numpy as np
 from teras import dataset, io, logging, preprocessing, training
 from teras.app import App, arg
@@ -35,7 +35,8 @@ class CharCNN(chainer.Chain):
                 stride=(1, embed_size),
                 pad=(int(window_size / 2), 0),
                 nobias=True,
-                initialW=None,
+                initialW=initializers.GlorotUniform(),
+                initial_bias=0,
             )
         self.dropout = dropout
         self._desc = {
@@ -78,6 +79,9 @@ class Model(chainer.Chain):
                  n_blstm_layers=1,
                  lstm_hidden_size=200,
                  dropout=0.5):
+        """
+        @TODO: logging parameters initialization
+        """
         super().__init__()
         if isinstance(word_embedding, np.ndarray):
             word_vocab_size, word_embed_size = word_embedding.shape
@@ -91,10 +95,13 @@ class Model(chainer.Chain):
             self.char_cnn = CharCNN(char_embedding,
                                     char_filter_size, char_window_size,
                                     dropout)
+            # @TODO: should specify parameters initialization
             self.blstm = L.NStepBiLSTM(n_blstm_layers,
                                        word_embed_size + char_filter_size,
                                        lstm_hidden_size, dropout)
-            self.linear = L.Linear(lstm_hidden_size * 2, n_labels)
+            self.linear = L.Linear(lstm_hidden_size * 2, n_labels,
+                                   initialW=initializers.GlorotUniform(),
+                                   initial_bias=0)
         self._desc = {
             'word_embedding': (word_vocab_size, word_embed_size),
             'n_labels': n_labels,
@@ -128,6 +135,16 @@ class Model(chainer.Chain):
         return repr(self._desc)
 
 
+class Uniform(object):
+
+    def __init__(self, scale=1.0):
+        self.scale = scale
+
+    def __call__(self, shape, dtype=np.float32):
+        return np.random.uniform(-1 * self.scale, 1 * self.scale, shape) \
+            .astype(dtype, copy=False)
+
+
 class DataLoader(dataset.loader.CorpusLoader):
 
     def __init__(self,
@@ -142,10 +159,12 @@ class DataLoader(dataset.loader.CorpusLoader):
         self.add_processor(
             'word', embed_file=word_embed_file, embed_size=word_embed_size,
             embed_dtype=embed_dtype,
+            initializer=Uniform(scale=np.sqrt(3 / word_embed_size)),
             preprocess=word_preprocess, unknown=word_unknown)
         self.add_processor(
             'char', embed_file=None, embed_size=char_embed_size,
             embed_dtype=embed_dtype,
+            initializer=Uniform(scale=np.sqrt(3 / char_embed_size)),
             preprocess=lambda x: x.lower())
         self.tag_map = preprocessing.text.Vocab()
 
