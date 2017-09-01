@@ -113,7 +113,7 @@ class Model(chainer.Chain):
         indices = [0]
         xs = []
         for word_seq, char_seq in zip(word_seqs, char_seqs):
-            x_word = self.word_embed(word_seq)
+            x_word = self.word_embed(self.xp.array(word_seq))
             x_char = self.char_cnn(char_seq)
             x = F.concat((x_word, x_char))
             indices.append(indices[-1] + x.shape[0])
@@ -221,15 +221,21 @@ def train(
     optimizer.setup(model)
     optimizer.add_hook(chainer.optimizer.GradientClipping(5.0))
 
+    def compute_loss(ys, ts):
+        ys, ts = F.concat(ys, axis=0), F.concat(ts, axis=0)
+        if gpu >= 0:
+            ts.to_gpu()
+        return F.softmax_cross_entropy(ys, ts, ignore_label=-1)
+
+    def compute_accuracy(ys, ts):
+        ys, ts = F.concat(ys, axis=0), F.concat(ts, axis=0)
+        if gpu >= 0:
+            ts.to_gpu()
+        return F.accuracy(ys, ts, ignore_label=-1)
+
     trainer = training.Trainer(optimizer, model,
-                               loss_func=lambda ys, ts:
-                               F.softmax_cross_entropy(
-                                   F.concat(ys, axis=0),
-                                   F.concat(ts, axis=0), ignore_label=-1),
-                               accuracy_func=lambda ys, ts:
-                               F.accuracy(
-                                   F.concat(ys, axis=0),
-                                   F.concat(ts, axis=0), ignore_label=-1))
+                               loss_func=compute_loss,
+                               accuracy_func=compute_accuracy)
     trainer.configure(framework_utils.config)
 
     trainer.fit(train_dataset, None,
@@ -249,6 +255,7 @@ if __name__ == "__main__":
         'batch_size': arg('--batchsize', type=int, default=10),
         'lr': arg('--lr', type=float, default=0.01),
         'gpu': arg('--gpu', type=int, default=-1),
+        'seed': arg('--seed', type=int, default=1),
     })
     chainer.config.debug = False
     chainer.config.type_check = False

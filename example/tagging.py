@@ -82,7 +82,7 @@ class Model(chainer.Chain):
         indices = [0]
         xs = []
         for word_seq, char_seq in zip(word_seqs, char_seqs):
-            x_word = self.word_embed(word_seq)
+            x_word = self.word_embed(self.xp.array(word_seq))
             x_char = self.char_cnn(char_seq)
             x = F.concat((x_word, x_char))
             indices.append(indices[-1] + x.shape[0])
@@ -191,6 +191,8 @@ def main(train_file,
             ys = model(words, chars)
             ys = F.concat(ys, axis=0)
             ts = F.concat(tags, axis=0)
+            if gpu >= 0:
+                ts.to_gpu()
             loss = F.softmax_cross_entropy(ys, ts, ignore_label=-1)
             loss.backward()
             optimizer.update()
@@ -214,6 +216,8 @@ def main(train_file,
             ys = model(words, chars)
             ys = F.concat(ys, axis=0)
             ts = F.concat(tags, axis=0)
+            if gpu >= 0:
+                ts.to_gpu()
             loss = F.softmax_cross_entropy(ys, ts, ignore_label=-1)
             accuracy = F.accuracy(ys, ts, ignore_label=-1)
             epoch_loss += loss.data
@@ -237,4 +241,5 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--gpu', type=int, default=-1)
     args = parser.parse_args()
-    main(args.trainfile, args.testfile, args.epoch, args.batchsize, args.lr)
+    main(args.trainfile, args.testfile,
+         args.epoch, args.batchsize, args.lr, args.gpu)
